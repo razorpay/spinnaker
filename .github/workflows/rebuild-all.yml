@@ -18,7 +18,15 @@ jobs:
   deck:
     if: github.event_name == 'workflow_dispatch' || (github.event_name == 'create' && startsWith(github.ref, 'refs/heads/release-'))
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
+      - name: Set up Package Manager Guard
+        uses: safedep/pmg@v1
+        with:
+          server-mode: true
+          api-key: ${{ secrets.PMG_PUBLIC_REPOS_TOKEN }}
+          tenant-id: ${{ secrets.PMG_TENANT_ID }}
       - uses: actions/create-github-app-token@v3
         id: app-token
         with:
@@ -38,10 +46,21 @@ jobs:
                 'version-override': '${{ needs.version.outputs.version }}'
               }
             });
+      - name: Enforce PMG policy
+        if: always()
+        run: pmg proxy stop --fail-on-violation
   deck-kayenta:
     if: github.event_name == 'workflow_dispatch' || (github.event_name == 'create' && startsWith(github.ref, 'refs/heads/release-'))
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
+      - name: Set up Package Manager Guard
+        uses: safedep/pmg@v1
+        with:
+          server-mode: true
+          api-key: ${{ secrets.PMG_PUBLIC_REPOS_TOKEN }}
+          tenant-id: ${{ secrets.PMG_TENANT_ID }}
       - uses: actions/create-github-app-token@v3
         id: app-token
         with:
@@ -62,6 +81,9 @@ jobs:
                 'version-override': '${{ needs.version.outputs.version }}'
               }
             });
+      - name: Enforce PMG policy
+        if: always()
+        run: pmg proxy stop --fail-on-violation
   echo:
     if: github.event_name == 'workflow_dispatch' || (github.event_name == 'create' && startsWith(github.ref, 'refs/heads/release-'))
     uses: ./.github/workflows/echo.yml

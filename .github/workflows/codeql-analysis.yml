@@ -51,6 +51,13 @@ jobs:
         distribution: zulu
         cache: ${{ !env.ACT && 'gradle' || '' }}
 
+    - name: Set up Package Manager Guard
+      uses: safedep/pmg@v1
+      with:
+        server-mode: true
+        api-key: ${{ secrets.PMG_PUBLIC_REPOS_TOKEN }}
+        tenant-id: ${{ secrets.PMG_TENANT_ID }}
+
     - name: Build ${{ matrix.project }}
       env:
         GRADLE_OPTS: -Dorg.gradle.daemon=false -Xmx10g -Xms2g
@@ -59,3 +66,7 @@ jobs:
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v4
+
+    - name: Enforce PMG policy
+      if: always()
+      run: pmg proxy stop --fail-on-violation

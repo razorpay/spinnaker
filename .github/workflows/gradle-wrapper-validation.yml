@@ -1,6 +1,9 @@
 name: "Validate Gradle Wrapper"
 on: [pull_request]
 
+permissions:
+  contents: read
+
 jobs:
   validation:
     name: "Gradle wrapper validation"
@@ -8,3 +11,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         uses: gradle/actions/wrapper-validation@v6
+      - name: Set up Package Manager Guard
+        uses: safedep/pmg@v1
+        with:
+          server-mode: true
+          api-key: ${{ secrets.PMG_PUBLIC_REPOS_TOKEN }}
+          tenant-id: ${{ secrets.PMG_TENANT_ID }}
+      - name: Enforce PMG policy
+        if: always()
+        run: pmg proxy stop --fail-on-violation

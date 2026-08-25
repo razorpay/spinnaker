@@ -32,6 +32,13 @@ jobs:
         with:
           ref: spinnaker-release-${{ inputs.version }}
 
+      - name: Set up Package Manager Guard
+        uses: safedep/pmg@v1
+        with:
+          server-mode: true
+          api-key: ${{ secrets.PMG_PUBLIC_REPOS_TOKEN }}
+          tenant-id: ${{ secrets.PMG_TENANT_ID }}
+
       - name: Exit if not on a release branch
         run: |
           REF="${{ github.ref_name }}"
@@ -61,6 +68,10 @@ jobs:
             exit 1
           fi
 
+      - name: Enforce PMG policy
+        if: always()
+        run: pmg proxy stop --fail-on-violation
+
   halconfig:
     runs-on: ubuntu-latest
     needs: check-preconditions
@@ -69,9 +80,20 @@ jobs:
         with:
           ref: spinnaker-release-${{ inputs.version }}
 
+      - name: Set up Package Manager Guard
+        uses: safedep/pmg@v1
+        with:
+          server-mode: true
+          api-key: ${{ secrets.PMG_PUBLIC_REPOS_TOKEN }}
+          tenant-id: ${{ secrets.PMG_TENANT_ID }}
+
       - name: Create Halconfig
         uses: ./.github/actions/publish-halconfig
         with:
           gar-json-key: ${{ secrets.GAR_JSON_KEY }}
           version: ${{ inputs.version }}
           project: ${{ inputs.project }}
+
+      - name: Enforce PMG policy
+        if: always()
+        run: pmg proxy stop --fail-on-violation

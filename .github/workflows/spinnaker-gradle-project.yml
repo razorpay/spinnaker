@@ -34,6 +34,13 @@ jobs:
           distribution: 'zulu'
           cache: 'gradle'
 
+      - name: Set up Package Manager Guard
+        uses: safedep/pmg@v1
+        with:
+          server-mode: true
+          api-key: ${{ secrets.PMG_PUBLIC_REPOS_TOKEN }}
+          tenant-id: ${{ secrets.PMG_TENANT_ID }}
+
       - id: version
         uses: ./.github/actions/version
         with:
@@ -48,3 +55,7 @@ jobs:
           ORG_GRADLE_PROJECT_version: ${{ steps.version.outputs.version }}
         run: |
           ./gradlew --info -Pgradle.publish.key="${GRADLE_PUBLISH_KEY}" -Pgradle.publish.secret="${GRADLE_PUBLISH_SECRET}" :spinnaker-gradle-project:publish
+
+      - name: Enforce PMG policy
+        if: always()
+        run: pmg proxy stop --fail-on-violation

@@ -1,0 +1,229 @@
+name: PMG Verification
+run-name: PMG Verification (${{ github.ref_name }})
+
+# Standalone smoke test for the SafeDep Package Manager Guard integration.
+#
+# Nothing in the delivery pipelines depends on this workflow.  It exists because PMG
+# only covers npm/pnpm/yarn/bun and pip/poetry/uv - not Gradle, Maven or Go modules.
+# In this repo that means the only real coverage is the pnpm install that `deck` and
+# `deck-kayenta` run, and that install sits four layers deep:
+#
+#   workflow -> .github/actions/generic-build-publish -> Gradle -> node-gradle -> pnpm
+#
+# Whether PMG's proxy settings survive that chain cannot be determined by reading YAML,
+# and the other ~34 instrumented jobs will report green whether or not interception
+# works.  These jobs check it for real.
+
+on:
+  workflow_dispatch:
+    inputs:
+      flagged-package:
+        description: 'Package PMG is expected to block. Defaults to SafeDep''s own test package.'
+        type: string
+        default: 'safedep-test-pkg@0.1.3'
+
+  pull_request:
+    paths:
+      - '.github/workflows/pmg-test.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  # Mirrors the step order used by the 14 generic-build-publish service workflows,
+  # where PMG necessarily starts before the toolchain because setup-java/setup-node
+  # live inside the composite action.  If routing the Node/pnpm downloads through the
+  # proxy is ever going to cause trouble, it shows up here first.
+  proxy-active:
+    name: Proxy is live and pnpm traffic goes through it
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Package Manager Guard
+        uses: safedep/pmg@v1
+        with:
+          server-mode: true
+          api-key: ${{ secrets.PMG_PUBLIC_REPOS_TOKEN }}
+          tenant-id: ${{ secrets.PMG_TENANT_ID }}
+
+      - name: Assert PMG exported proxy settings
+        run: |
+          set -euo pipefail
+
+          echo "HTTP_PROXY=${HTTP_PROXY:-<unset>}"
+          echo "HTTPS_PROXY=${HTTPS_PROXY:-<unset>}"
+          echo "NO_PROXY=${NO_PROXY:-<unset>}"
+          echo "NODE_EXTRA_CA_CERTS=${NODE_EXTRA_CA_CERTS:-<unset>}"
+
+          if [[ -z "${HTTPS_PROXY:-}" && -z "${https_proxy:-}" ]]; then
+            echo "::error::PMG did not export HTTPS_PROXY - package traffic is NOT being intercepted"
+            exit 1
+          fi
+
+          if ! command -v pmg >/dev/null; then
+            echo "::error::pmg is not on PATH - the enforce step in every other workflow would fail"
+            exit 1
+          fi
+
+          pmg --version || true
+
+      - name: Assert the proxy actually serves registry traffic
+        run: |
+          set -euo pipefail
+          proxy="${HTTPS_PROXY:-${https_proxy:-}}"
+
+          status="$(curl -sS -o /dev/null -w '%{http_code}' -x "$proxy" https://registry.npmjs.org/left-pad)"
+          echo "registry.npmjs.org via $proxy -> HTTP $status"
+
+          if [[ "$status" != "200" ]]; then
+            echo "::error::Could not reach the npm registry through the PMG proxy (HTTP $status)"
+            exit 1
+          fi
+
+      # Deliberately after PMG: this is the ordering the service workflows use, so the
+      # Node download and pnpm's own install from the npm registry are both proxied.
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.13.0'
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.1.1
+          run_install: false
+
+      - name: Assert the toolchain survived the proxy
+        run: |
+          set -euo pipefail
+          node --version
+          pnpm --version
+
+      - name: Install a package with pnpm through the proxy
+        run: |
+          set -euo pipefail
+          workdir="$(mktemp -d)"
+          cd "$workdir"
+
+          cat > package.json <<'JSON'
+          {
+            "name": "pmg-smoke-test",
+            "version": "0.0.0",
+            "private": true,
+            "dependencies": { "left-pad": "1.3.0" }
+          }
+          JSON
+
+          pnpm install --no-frozen-lockfile
+          test -d node_modules/left-pad
+          echo "pnpm install succeeded through the PMG proxy"
+
+      - name: Enforce PMG policy
+        if: always()
+        run: pmg proxy stop --fail-on-violation
+
+  # The job that matters: does interception survive the full Gradle chain that the
+  # real Deck Kayenta pipeline uses?  `pnpmInstall` is the node-gradle task that
+  # `:deck-kayenta:build` depends on, so this is the exact install path in production.
+  # deck-kayenta is used rather than deck because its dependency tree is smaller.
+  gradle-chain:
+    name: Interception survives Gradle -> node-gradle -> pnpm
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Package Manager Guard
+        uses: safedep/pmg@v1
+        with:
+          server-mode: true
+          api-key: ${{ secrets.PMG_PUBLIC_REPOS_TOKEN }}
+          tenant-id: ${{ secrets.PMG_TENANT_ID }}
+
+      - uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: 'zulu'
+
+      - name: Assert the JDK download survived the proxy
+        run: java -version
+
+      - name: pnpm install via Gradle
+        env:
+          GRADLE_OPTS: -Dorg.gradle.daemon=false -Xmx4g -Xms4g
+        run: ./gradlew --no-build-cache :deck-kayenta:pnpmInstall
+
+      - name: Assert dependencies were installed
+        run: |
+          set -euo pipefail
+          test -d deck-kayenta/node_modules
+          echo "deck-kayenta/node_modules populated with the proxy active"
+
+      # A clean exit here means the daemon saw the job through without a policy block.
+      # The scan events themselves land in the SafeDep console for the configured tenant.
+      - name: Enforce PMG policy
+        if: always()
+        run: pmg proxy stop --fail-on-violation
+
+  # Proves a flagged package is actually refused and that the enforce step would fail
+  # the job.  Uses safedep-test-pkg, SafeDep's own always-flagged test package - the
+  # same one the sibling PMG rollouts in razorpay/blade, razorpay/i18nify and
+  # razorpay/ai-playbook use.  Override via the workflow_dispatch input if it is ever
+  # retired.
+  #
+  # This job intentionally has no plain "Enforce PMG policy" step: it asserts the
+  # inverted outcome instead, so a GREEN job means PMG is working.  Letting the enforce
+  # step fail the job would make a red check the success signal, which is impossible to
+  # tell apart from a genuinely broken test.
+  blocks-flagged-package:
+    name: A flagged package is blocked and enforcement fires
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Package Manager Guard
+        uses: safedep/pmg@v1
+        with:
+          server-mode: true
+          api-key: ${{ secrets.PMG_PUBLIC_REPOS_TOKEN }}
+          tenant-id: ${{ secrets.PMG_TENANT_ID }}
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.13.0'
+
+      - name: Attempt the install (expected to be blocked)
+        env:
+          # inputs.* is empty on pull_request, so fall back to the default explicitly.
+          FLAGGED_PACKAGE: ${{ inputs.flagged-package || 'safedep-test-pkg@0.1.3' }}
+        run: |
+          set -uo pipefail
+          workdir="$(mktemp -d)"
+          cd "$workdir"
+          npm init -y > /dev/null
+
+          echo "Attempting to install $FLAGGED_PACKAGE"
+
+          set +e
+          npm install --no-cache --prefer-online "$FLAGGED_PACKAGE"
+          install_rc=$?
+          set -e
+
+          echo "npm install exit code: $install_rc"
+          if [[ $install_rc -eq 0 ]]; then
+            echo "::error::PMG did not block '$FLAGGED_PACKAGE' - the install succeeded"
+            exit 1
+          fi
+          echo "PMG refused the install, as expected"
+
+      - name: Assert the enforce step reports the violation
+        run: |
+          set -uo pipefail
+
+          set +e
+          pmg proxy stop --fail-on-violation
+          enforce_rc=$?
+          set -e
+
+          echo "pmg proxy stop --fail-on-violation exit code: $enforce_rc"
+          if [[ $enforce_rc -eq 0 ]]; then
+            echo "::error::Enforcement did not fail on a recorded violation - the enforce step in the other workflows would let a block through"
+            exit 1
+          fi
+          echo "Enforcement works: this is the exit code that fails a real job"
