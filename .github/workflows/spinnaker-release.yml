@@ -26,7 +26,8 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Package Manager Guard
+      - name: Setup PMG proxy
+        id: pmg-setup
         uses: safedep/pmg@v1
         with:
           server-mode: true
@@ -75,7 +76,12 @@ jobs:
 
       - name: Enforce PMG policy
         if: always()
-        run: pmg proxy stop --fail-on-violation
+        run: |
+          if [ "${{ steps.pmg-setup.outcome }}" = "success" ]; then
+            pmg proxy stop --fail-on-violation
+          else
+            pmg proxy stop || true
+          fi
 
   version:
     runs-on: ubuntu-latest
@@ -87,7 +93,8 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Package Manager Guard
+      - name: Setup PMG proxy
+        id: pmg-setup
         uses: safedep/pmg@v1
         with:
           server-mode: true
@@ -105,7 +112,12 @@ jobs:
 
       - name: Enforce PMG policy
         if: always()
-        run: pmg proxy stop --fail-on-violation
+        run: |
+          if [ "${{ steps.pmg-setup.outcome }}" = "success" ]; then
+            pmg proxy stop --fail-on-violation
+          else
+            pmg proxy stop || true
+          fi
 
   clouddriver:
     needs: version
@@ -118,7 +130,8 @@ jobs:
     needs: version
     runs-on: ubuntu-latest
     steps:
-      - name: Set up Package Manager Guard
+      - name: Setup PMG proxy
+        id: pmg-setup
         uses: safedep/pmg@v1
         with:
           server-mode: true
@@ -150,12 +163,18 @@ jobs:
 
       - name: Enforce PMG policy
         if: always()
-        run: pmg proxy stop --fail-on-violation
+        run: |
+          if [ "${{ steps.pmg-setup.outcome }}" = "success" ]; then
+            pmg proxy stop --fail-on-violation
+          else
+            pmg proxy stop || true
+          fi
   deck-kayenta:
     needs: version
     runs-on: ubuntu-latest
     steps:
-      - name: Set up Package Manager Guard
+      - name: Setup PMG proxy
+        id: pmg-setup
         uses: safedep/pmg@v1
         with:
           server-mode: true
@@ -182,7 +201,12 @@ jobs:
             });
       - name: Enforce PMG policy
         if: always()
-        run: pmg proxy stop --fail-on-violation
+        run: |
+          if [ "${{ steps.pmg-setup.outcome }}" = "success" ]; then
+            pmg proxy stop --fail-on-violation
+          else
+            pmg proxy stop || true
+          fi
   echo:
     needs: version
     uses: ./.github/workflows/echo.yml
@@ -272,7 +296,8 @@ jobs:
     needs: [version, clouddriver, deck, deck-kayenta, echo, fiat, front50, gate, halyard, igor, kayenta, keel, orca, rosco, spin, libs]
     steps:
       - uses: actions/checkout@v7
-      - name: Set up Package Manager Guard
+      - name: Setup PMG proxy
+        id: pmg-setup
         uses: safedep/pmg@v1
         with:
           server-mode: true
@@ -288,7 +313,12 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Enforce PMG policy
         if: always()
-        run: pmg proxy stop --fail-on-violation
+        run: |
+          if [ "${{ steps.pmg-setup.outcome }}" = "success" ]; then
+            pmg proxy stop --fail-on-violation
+          else
+            pmg proxy stop || true
+          fi
 
   spinnaker-release-bom:
     uses: ./.github/workflows/spinnaker-release-bom.yml

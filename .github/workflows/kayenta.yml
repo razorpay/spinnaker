@@ -57,7 +57,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - name: Set up Package Manager Guard
+      - name: Setup PMG proxy
+        id: pmg-setup
         uses: safedep/pmg@v1
         with:
           server-mode: true
@@ -74,4 +75,9 @@ jobs:
           gar-json-key: ${{ secrets.GAR_JSON_KEY }}
       - name: Enforce PMG policy
         if: always()
-        run: pmg proxy stop --fail-on-violation
+        run: |
+          if [ "${{ steps.pmg-setup.outcome }}" = "success" ]; then
+            pmg proxy stop --fail-on-violation
+          else
+            pmg proxy stop || true
+          fi

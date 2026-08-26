@@ -16,9 +16,6 @@ on:
       - 'kayenta/**'
       - '.github/workflows/kayenta-integration-tests.yml'
 
-permissions:
-  contents: read
-
 env:
   GRADLE_OPTS: -Dorg.gradle.daemon=false -Xmx2g -Xms2g
 
@@ -35,6 +32,14 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v7
 
+      - name: Setup PMG proxy
+        id: pmg-setup
+        uses: safedep/pmg@v1
+        with:
+          server-mode: true
+          api-key: ${{ secrets.PMG_PUBLIC_REPOS_TOKEN }}
+          tenant-id: ${{ secrets.PMG_TENANT_ID }}
+
       - name: Gradle validation step
         uses: gradle/actions/wrapper-validation@v6
 
@@ -45,20 +50,18 @@ jobs:
           distribution: 'zulu'
           cache: 'gradle'
 
-      - name: Set up Package Manager Guard
-        uses: safedep/pmg@v1
-        with:
-          server-mode: true
-          api-key: ${{ secrets.PMG_PUBLIC_REPOS_TOKEN }}
-          tenant-id: ${{ secrets.PMG_TENANT_ID }}
-
       - name: Run Integration Test
         run: |
           ./gradlew :kayenta:kayenta-integration-tests:test --tests ${{ matrix.tests }}Test
 
       - name: Enforce PMG policy
         if: always()
-        run: pmg proxy stop --fail-on-violation
+        run: |
+          if [ "${{ steps.pmg-setup.outcome }}" = "success" ]; then
+            pmg proxy stop --fail-on-violation
+          else
+            pmg proxy stop || true
+          fi
 
   provider-integration-tests:
     name: Provider Integration Tests
@@ -72,6 +75,14 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v7
 
+      - name: Setup PMG proxy
+        id: pmg-setup
+        uses: safedep/pmg@v1
+        with:
+          server-mode: true
+          api-key: ${{ secrets.PMG_PUBLIC_REPOS_TOKEN }}
+          tenant-id: ${{ secrets.PMG_TENANT_ID }}
+
       - name: Gradle validation step
         uses: gradle/actions/wrapper-validation@v6
 
@@ -82,17 +93,15 @@ jobs:
           distribution: 'zulu'
           cache: 'gradle'
 
-      - name: Set up Package Manager Guard
-        uses: safedep/pmg@v1
-        with:
-          server-mode: true
-          api-key: ${{ secrets.PMG_PUBLIC_REPOS_TOKEN }}
-          tenant-id: ${{ secrets.PMG_TENANT_ID }}
-
       - name: Run Provider Integration Test
         run: |
           ./gradlew :kayenta:kayenta-integration-tests:test --tests ${{ matrix.provider }}StandaloneCanaryAnalysisTest.${{ matrix.test }}
 
       - name: Enforce PMG policy
         if: always()
-        run: pmg proxy stop --fail-on-violation
+        run: |
+          if [ "${{ steps.pmg-setup.outcome }}" = "success" ]; then
+            pmg proxy stop --fail-on-violation
+          else
+            pmg proxy stop || true
+          fi

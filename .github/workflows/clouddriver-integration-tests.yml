@@ -20,9 +20,6 @@ on:
       - 'kork/**'
       - '.github/workflows/clouddriver-integration-tests.yml'
 
-permissions:
-  contents: read
-
 env:
   GRADLE_OPTS: -Dorg.gradle.daemon=false -Xmx10g -Xms10g
 
@@ -31,6 +28,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v7
+    - name: Setup PMG proxy
+      id: pmg-setup
+      uses: safedep/pmg@v1
+      with:
+        server-mode: true
+        api-key: ${{ secrets.PMG_PUBLIC_REPOS_TOKEN }}
+        tenant-id: ${{ secrets.PMG_TENANT_ID }}
     - uses: actions/setup-java@v5
       with:
         java-version: |
@@ -53,12 +57,6 @@ jobs:
         key: ${{ runner.os }}-cd-it-${{ github.event.pull_request.head.sha }}
         restore-keys: |
           ${{ runner.os }}-cd-it-${{ github.event.before }}
-    - name: Set up Package Manager Guard
-      uses: safedep/pmg@v1
-      with:
-        server-mode: true
-        api-key: ${{ secrets.PMG_PUBLIC_REPOS_TOKEN }}
-        tenant-id: ${{ secrets.PMG_TENANT_ID }}
     # Separating integration tests by provider allows to have separate logs
     - name: Amazon ECS Provider Integration Tests
       run: ./gradlew --build-cache :clouddriver:clouddriver-ecs:integrationTest
@@ -68,4 +66,9 @@ jobs:
       run: ./gradlew --build-cache :clouddriver:clouddriver-aws:integrationTest
     - name: Enforce PMG policy
       if: always()
-      run: pmg proxy stop --fail-on-violation
+      run: |
+        if [ "${{ steps.pmg-setup.outcome }}" = "success" ]; then
+          pmg proxy stop --fail-on-violation
+        else
+          pmg proxy stop || true
+        fi

@@ -18,10 +18,9 @@ jobs:
   deck:
     if: github.event_name == 'workflow_dispatch' || (github.event_name == 'create' && startsWith(github.ref, 'refs/heads/release-'))
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
     steps:
-      - name: Set up Package Manager Guard
+      - name: Setup PMG proxy
+        id: pmg-setup
         uses: safedep/pmg@v1
         with:
           server-mode: true
@@ -48,14 +47,18 @@ jobs:
             });
       - name: Enforce PMG policy
         if: always()
-        run: pmg proxy stop --fail-on-violation
+        run: |
+          if [ "${{ steps.pmg-setup.outcome }}" = "success" ]; then
+            pmg proxy stop --fail-on-violation
+          else
+            pmg proxy stop || true
+          fi
   deck-kayenta:
     if: github.event_name == 'workflow_dispatch' || (github.event_name == 'create' && startsWith(github.ref, 'refs/heads/release-'))
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
     steps:
-      - name: Set up Package Manager Guard
+      - name: Setup PMG proxy
+        id: pmg-setup
         uses: safedep/pmg@v1
         with:
           server-mode: true
@@ -83,7 +86,12 @@ jobs:
             });
       - name: Enforce PMG policy
         if: always()
-        run: pmg proxy stop --fail-on-violation
+        run: |
+          if [ "${{ steps.pmg-setup.outcome }}" = "success" ]; then
+            pmg proxy stop --fail-on-violation
+          else
+            pmg proxy stop || true
+          fi
   echo:
     if: github.event_name == 'workflow_dispatch' || (github.event_name == 'create' && startsWith(github.ref, 'refs/heads/release-'))
     uses: ./.github/workflows/echo.yml

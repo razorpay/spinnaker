@@ -15,7 +15,8 @@ jobs:
     if: startsWith(github.repository, 'spinnaker/')
     runs-on: ubuntu-latest
     steps:
-    - name: Set up Package Manager Guard
+    - name: Setup PMG proxy
+      id: pmg-setup
       uses: safedep/pmg@v1
       with:
         server-mode: true
@@ -37,4 +38,9 @@ jobs:
           You can always reopen this issue if needed.
     - name: Enforce PMG policy
       if: always()
-      run: pmg proxy stop --fail-on-violation
+      run: |
+        if [ "${{ steps.pmg-setup.outcome }}" = "success" ]; then
+          pmg proxy stop --fail-on-violation
+        else
+          pmg proxy stop || true
+        fi

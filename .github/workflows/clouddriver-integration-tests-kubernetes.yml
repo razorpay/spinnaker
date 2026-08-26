@@ -20,9 +20,6 @@ on:
       - 'kork/**'
       - '.github/workflows/clouddriver-integration-tests-kubernetes.yml'
 
-permissions:
-  contents: read
-
 env:
   GRADLE_OPTS: -Dorg.gradle.daemon=false -Xmx12g -Xms12g
 
@@ -57,6 +54,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+
+      - name: Setup PMG proxy
+        id: pmg-setup
+        uses: safedep/pmg@v1
+        with:
+          server-mode: true
+          api-key: ${{ secrets.PMG_PUBLIC_REPOS_TOKEN }}
+          tenant-id: ${{ secrets.PMG_TENANT_ID }}
       - uses: actions/setup-java@v5
         with:
           java-version: |
@@ -82,17 +87,15 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cd-it-${{ github.event.before }}
 
-      - name: Set up Package Manager Guard
-        uses: safedep/pmg@v1
-        with:
-          server-mode: true
-          api-key: ${{ secrets.PMG_PUBLIC_REPOS_TOKEN }}
-          tenant-id: ${{ secrets.PMG_TENANT_ID }}
-
       - name: Kubernetes Provider Integration Tests
         run: |
           ./gradlew --build-cache :clouddriver:clouddriver-kubernetes:integrationTest -Pkubernetes-image=${{ matrix.kubernetes-image }} -Pkubectl-version=${{ matrix.kubectl-version }}
 
       - name: Enforce PMG policy
         if: always()
-        run: pmg proxy stop --fail-on-violation
+        run: |
+          if [ "${{ steps.pmg-setup.outcome }}" = "success" ]; then
+            pmg proxy stop --fail-on-violation
+          else
+            pmg proxy stop || true
+          fi

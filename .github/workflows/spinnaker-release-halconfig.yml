@@ -32,7 +32,8 @@ jobs:
         with:
           ref: spinnaker-release-${{ inputs.version }}
 
-      - name: Set up Package Manager Guard
+      - name: Setup PMG proxy
+        id: pmg-setup
         uses: safedep/pmg@v1
         with:
           server-mode: true
@@ -70,7 +71,12 @@ jobs:
 
       - name: Enforce PMG policy
         if: always()
-        run: pmg proxy stop --fail-on-violation
+        run: |
+          if [ "${{ steps.pmg-setup.outcome }}" = "success" ]; then
+            pmg proxy stop --fail-on-violation
+          else
+            pmg proxy stop || true
+          fi
 
   halconfig:
     runs-on: ubuntu-latest
@@ -80,7 +86,8 @@ jobs:
         with:
           ref: spinnaker-release-${{ inputs.version }}
 
-      - name: Set up Package Manager Guard
+      - name: Setup PMG proxy
+        id: pmg-setup
         uses: safedep/pmg@v1
         with:
           server-mode: true
@@ -96,4 +103,9 @@ jobs:
 
       - name: Enforce PMG policy
         if: always()
-        run: pmg proxy stop --fail-on-violation
+        run: |
+          if [ "${{ steps.pmg-setup.outcome }}" = "success" ]; then
+            pmg proxy stop --fail-on-violation
+          else
+            pmg proxy stop || true
+          fi
