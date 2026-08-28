@@ -15,6 +15,13 @@ jobs:
     if: startsWith(github.repository, 'spinnaker/')
     runs-on: ubuntu-latest
     steps:
+    - name: Setup PMG proxy
+      id: pmg-setup
+      uses: safedep/pmg@v1
+      with:
+        server-mode: true
+        api-key: ${{ secrets.PMG_PUBLIC_REPOS_TOKEN }}
+        tenant-id: ${{ secrets.PMG_TENANT_ID }}
     - name: stale
       uses: actions/stale@v10
       with:
@@ -29,3 +36,11 @@ jobs:
         close-issue-message: >
           This issue is tagged as 'to-be-closed' and hasn't been updated in 90 days, so we are closing it.
           You can always reopen this issue if needed.
+    - name: Enforce PMG policy
+      if: always()
+      run: |
+        if [ "${{ steps.pmg-setup.outcome }}" = "success" ]; then
+          pmg proxy stop --fail-on-violation
+        else
+          pmg proxy stop || true
+        fi

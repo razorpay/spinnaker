@@ -28,6 +28,14 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - name: Setup PMG proxy
+        id: pmg-setup
+        uses: safedep/pmg@v1
+        with:
+          server-mode: true
+          api-key: ${{ secrets.PMG_PUBLIC_REPOS_TOKEN }}
+          tenant-id: ${{ secrets.PMG_TENANT_ID }}
+
       - uses: actions/setup-java@v5
         with:
           java-version: 17
@@ -48,3 +56,12 @@ jobs:
           ORG_GRADLE_PROJECT_version: ${{ steps.version.outputs.version }}
         run: |
           ./gradlew --info -Pgradle.publish.key="${GRADLE_PUBLISH_KEY}" -Pgradle.publish.secret="${GRADLE_PUBLISH_SECRET}" :spinnaker-gradle-project:publish
+
+      - name: Enforce PMG policy
+        if: always()
+        run: |
+          if [ "${{ steps.pmg-setup.outcome }}" = "success" ]; then
+            pmg proxy stop --fail-on-violation
+          else
+            pmg proxy stop || true
+          fi
