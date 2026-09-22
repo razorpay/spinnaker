@@ -6,6 +6,7 @@ settings:
 
 overrides:
   atob: 2.1.0
+  set-value@>=2 <3: 2.0.1
 
 importers:
 
@@ -10765,10 +10766,9 @@ packages:
     engines: {node: '>=0.10.0'}
     deprecated: Critical bug fixed in v3.0.1, please upgrade to the latest version.
 
-  set-value@2.0.0:
-    resolution: {integrity: sha512-hw0yxk9GT/Hr5yJEYnHNKYXkIA8mVJgd9ditYZCe16ZczcaELYYcfvaXesNACk2O8O0nTiPQcQhGUQj8JLzeeg==}
+  set-value@2.0.1:
+    resolution: {integrity: sha512-JxHc1weCN68wRY0fhCoXpyK55m/XPHafOmK4UWD7m2CI14GMcFypt4w/0+NV5f/ZMby2F6S2wwA7fgynh9gWSw==}
     engines: {node: '>=0.10.0'}
-    deprecated: Critical bug fixed in v3.0.1, please upgrade to the latest version.
 
   setimmediate@1.0.5:
     resolution: {integrity: sha512-MATJdZp8sLqDl/68LfQmbP8zKPLQNV6BIZoIgrscFDQ+RsvK/BxeDQOgyxKKoh0y/8h3BqVFnCqQ/gd+reiIXA==}
@@ -17193,7 +17193,7 @@ snapshots:
       get-value: 2.0.6
       has-value: 1.0.0
       isobject: 3.0.1
-      set-value: 2.0.0
+      set-value: 2.0.1
       to-object-path: 0.3.0
       union-value: 1.0.0
       unset-value: 1.0.0
@@ -24077,7 +24077,7 @@ snapshots:
       is-plain-object: 2.0.4
       to-object-path: 0.3.0
 
-  set-value@2.0.0:
+  set-value@2.0.1:
     dependencies:
       extend-shallow: 2.0.1
       is-extendable: 0.1.1
